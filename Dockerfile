@@ -1,14 +1,13 @@
 # Build stage
 FROM --platform=linux/amd64 golang:1.24-alpine AS builder
-# ARG APP_VERSION # Add if you want to pass version during build
+ARG APP_VERSION
 
 # Install build dependencies (Only needed if CGO_ENABLED=1)
 # RUN apk add --no-cache gcc musl-dev
 
 WORKDIR /app
 
-# Copy go mod and sum files first for better layer caching
-COPY go.mod go.sum ./
+COPY go.mod ./
 
 # Download dependencies with caching
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -21,14 +20,10 @@ COPY . .
 # Output binary to /app/komodo-op inside the builder stage
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags '-s -w' -o /app/komodo-op ./cmd/komodo-op
-    # Add version flag if needed: -ldflags "-s -w -X main.Version=${APP_VERSION}"
+    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -ldflags "-s -w -X main.Version=${APP_VERSION}" -o /app/komodo-op ./cmd/komodo-op
 
 # Final stage
 FROM --platform=linux/amd64 alpine:latest
-
-# Install only necessary runtime dependencies (ca-certificates for HTTPS)
-RUN apk --no-cache add ca-certificates tzdata
 
 # Create a non-root user and group (e.g., ID 1001)
 # Using a fixed ID is generally better for consistency
@@ -45,12 +40,7 @@ RUN chown appuser:appgroup /app/komodo-op && \
 
 # Set default environment variables (can be overridden at runtime)
 ENV LOG_LEVEL="INFO"
-# Add other required ENV vars here if they have sensible defaults,
-# otherwise they must be provided via `docker run -e`
-# ENV OP_CONNECT_HOST=""
-# ENV OP_VAULT=""
-ENV SYNC_INTERVAL="1h" # Default interval for daemon mode, override at runtime
-# ... etc
+ENV SYNC_INTERVAL="1h"
 
 # Switch to the non-root user
 USER appuser
@@ -59,5 +49,5 @@ USER appuser
 ENTRYPOINT ["/app/komodo-op", "-daemon"]
 
 # Add labels (optional but good practice)
-LABEL org.opencontainers.image.source="https://github.com/0dragosh/komodo-op" # Example repo URL
-# LABEL org.opencontainers.image.version=${APP_VERSION} # Add if using APP_VERSION ARG
+LABEL org.opencontainers.image.source="https://github.com/0dragosh/komodo-op"
+LABEL org.opencontainers.image.version=${APP_VERSION}

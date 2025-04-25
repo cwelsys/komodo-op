@@ -16,6 +16,8 @@ import (
 	"komodo-op/internal/synchronizer"
 )
 
+var Version string
+
 func main() {
 	// --- CLI Flags ---
 	daemonMode := flag.Bool("daemon", false, "Run the application in daemon mode, syncing periodically.")

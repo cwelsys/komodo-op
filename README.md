@@ -1,8 +1,8 @@
 # komodo-op
 
-`komodo-op` is a middleware application written in Go that synchronizes secrets from a [1Password vault](https://1password.com/) (using a [1Password Connect server](https://developer.1password.com/docs/connect/)) to a [Komodo](https://komo.do/) instance.
+`komodo-op` is a middleware application written in Go that synchronizes secrets from a [1Password vault](https://1password.com/) (using a [1Password Connect server](https://developer.1password.com/docs/connect/)) to a [Komodo](https://komo.do/) instance global variables as secrets.
 
-It fetches items from a specified 1Password vault and creates or updates corresponding secret variables in Komodo.
+It fetches items from a specified 1Password vault and creates or updates corresponding secret variables in Komodo. It supports updates and deletes.
 
 ## Functionality
 
@@ -100,9 +100,4 @@ A `docker-compose.yaml` file is provided to simplify running `komodo-op` alongsi
 4.  **Stop Services:**
     ```bash
     docker compose down
-    ```
-
-### Running with Docker (Standalone)
-
-1.  **Build the Docker image:**
     ```
