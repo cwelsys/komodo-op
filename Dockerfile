@@ -36,7 +36,8 @@ COPY --from=builder /app/komodo-op /app/komodo-op
 
 # Ensure the binary is executable by the user
 RUN chown appuser:appgroup /app/komodo-op && \
-    chmod 750 /app/komodo-op # Allow user/group read/execute
+    chmod 750 /app/komodo-op && \
+    chmod +x /app/komodo-op
 
 # Set default environment variables (can be overridden at runtime)
 ENV LOG_LEVEL="INFO"
