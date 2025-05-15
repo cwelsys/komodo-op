@@ -1,17 +1,17 @@
 # These owners will be the default owners for everything in
 # the repo. Unless a later match takes precedence,
 # @cwel will be requested for review when someone opens a pull request.
-*       @cwel
+*       @cwelsys
 
 # Go code
-*.go    @cwel
+*.go    @cwelsys
 
 # Templates
-*.html  @cwel
+*.html  @cwelsys
 
 # Docker files
-Dockerfile      @cwel
+Dockerfile      @cwelsys
 docker-compose.yml  @cwel
 
 # GitHub Actions workflows
-.github/workflows/  @cwel
+.github/workflows/  @cwelsys
