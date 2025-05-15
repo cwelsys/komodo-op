@@ -43,6 +43,10 @@ func formatKomodoName(itemName, fieldLabel string) string {
 	safeItemName = nonAlphanumericRegex.ReplaceAllString(safeItemName, "_")
 	safeFieldLabel = nonAlphanumericRegex.ReplaceAllString(safeFieldLabel, "_")
 
+	// Convert to uppercase (restoring this functionality)
+	safeItemName = strings.ToUpper(safeItemName)
+	safeFieldLabel = strings.ToUpper(safeFieldLabel)
+
 	// Format is now just ITEMNAME__FIELDLABEL (without prefix)
 	if fieldLabel == "" {
 		return safeItemName

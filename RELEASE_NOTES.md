@@ -1,6 +1,6 @@
-# v0.2.1 Release Notes
+# v0.2.2 Release Notes
 
-## Changes since v0.2.0
+## Changes since v0.2.1
 
 ### Features
 - No new features
