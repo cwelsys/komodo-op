@@ -50,5 +50,5 @@ USER appuser
 ENTRYPOINT ["/app/komodo-op", "-daemon"]
 
 # Add labels (optional but good practice)
-LABEL org.opencontainers.image.source="https://github.com/0dragosh/komodo-op"
+LABEL org.opencontainers.image.source="https://git.cwel.sh/cwel/komodo-op"
 LABEL org.opencontainers.image.version=${APP_VERSION}

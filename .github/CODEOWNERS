@@ -1,17 +1,17 @@
 # These owners will be the default owners for everything in
 # the repo. Unless a later match takes precedence,
-# @0dragosh will be requested for review when someone opens a pull request.
-*       @0dragosh
+# @cwel will be requested for review when someone opens a pull request.
+*       @cwel
 
 # Go code
-*.go    @0dragosh
+*.go    @cwel
 
 # Templates
-*.html  @0dragosh
+*.html  @cwel
 
 # Docker files
-Dockerfile      @0dragosh
-docker-compose.yml  @0dragosh
+Dockerfile      @cwel
+docker-compose.yml  @cwel
 
 # GitHub Actions workflows
-.github/workflows/  @0dragosh 
+.github/workflows/  @cwel
