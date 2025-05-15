@@ -14,7 +14,8 @@ import (
 var nonAlphanumericRegex = regexp.MustCompile(`[^a-zA-Z0-9_]+`)
 var spaceRegex = regexp.MustCompile(`\s+`)
 
-const komodoNamePrefix = "OP__KOMODO__"
+// Identifier used in description to mark variables managed by this tool
+const managedByMarker = "1Password-Sync:"
 
 // Synchronizer handles the core logic of syncing secrets from 1Password to Komodo.
 type Synchronizer struct {
@@ -34,6 +35,7 @@ func New(opClient *opclient.Client, komodoClient *komodoclient.Client, cfg *conf
 
 // formatKomodoName formats the item title and field label into a Komodo variable name.
 func formatKomodoName(itemName, fieldLabel string) string {
+	// Keep sanitization for valid variable names but don't add prefix
 	safeItemName := spaceRegex.ReplaceAllString(itemName, "-")
 	safeFieldLabel := spaceRegex.ReplaceAllString(fieldLabel, "-")
 
@@ -41,13 +43,11 @@ func formatKomodoName(itemName, fieldLabel string) string {
 	safeItemName = nonAlphanumericRegex.ReplaceAllString(safeItemName, "_")
 	safeFieldLabel = nonAlphanumericRegex.ReplaceAllString(safeFieldLabel, "_")
 
-	name := fmt.Sprintf("%s%s__%s",
-		komodoNamePrefix,
-		strings.ToUpper(safeItemName),
-		strings.ToUpper(safeFieldLabel),
-	)
-
-	return name
+	// Format is now just ITEMNAME__FIELDLABEL (without prefix)
+	if fieldLabel == "" {
+		return safeItemName
+	}
+	return fmt.Sprintf("%s__%s", safeItemName, safeFieldLabel)
 }
 
 // sanitizeNameForLog replaces the last part of a secret name (after the last __)
@@ -75,7 +75,7 @@ func sanitizeNameForLog(name string) string {
 // syncKomodoSecret ensures a secret exists in Komodo with the correct value.
 func (s *Synchronizer) syncKomodoSecret(name, value string) error {
 	logging.Debug("Checking existence of Komodo variable '%s'", name)
-	_, found, err := s.komodoClient.GetVariable(name)
+	existingVar, found, err := s.komodoClient.GetVariable(name)
 
 	if err != nil {
 		return fmt.Errorf("failed during existence check for variable '%s': %w", name, err)
@@ -86,7 +86,7 @@ func (s *Synchronizer) syncKomodoSecret(name, value string) error {
 		return s.komodoClient.UpdateVariableValue(name, value)
 	} else {
 		logging.Info("  Variable '%s' does not exist, attempting create.", sanitizeNameForLog(name))
-		description := fmt.Sprintf("Synced from 1P vault '%s'", s.cfg.OpVaultUUID)
+		description := fmt.Sprintf("%s Synced from 1P vault '%s'", managedByMarker, s.cfg.OpVaultUUID)
 		return s.komodoClient.CreateVariable(name, value, description)
 	}
 }
@@ -96,7 +96,7 @@ func (s *Synchronizer) syncKomodoSecret(name, value string) error {
 func (s *Synchronizer) Run() int {
 	logging.Info("Fetching items from 1Password vault '%s'...", s.cfg.OpVaultUUID)
 	items, err := s.opClient.GetItems()
-	if err != nil {
+	if (err != nil) {
 		logging.Error("Failed to get items from 1Password: %v", err)
 		return 1 // Indicate failure
 	}
@@ -170,8 +170,8 @@ func (s *Synchronizer) Run() int {
 
 	deleteCount := 0
 	deleteErrorCount := 0
-	for name := range komodoVars {
-		if strings.HasPrefix(name, komodoNamePrefix) && !expectedKomodoNames[name] {
+	for name, details := range komodoVars {
+		if strings.Contains(details.Description, managedByMarker) && !expectedKomodoNames[name] {
 			logging.Info("  Found orphaned Komodo variable '%s', attempting delete.", sanitizeNameForLog(name))
 			err := s.komodoClient.DeleteVariable(name)
 			if err != nil {
