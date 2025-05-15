@@ -75,7 +75,7 @@ func sanitizeNameForLog(name string) string {
 // syncKomodoSecret ensures a secret exists in Komodo with the correct value.
 func (s *Synchronizer) syncKomodoSecret(name, value string) error {
 	logging.Debug("Checking existence of Komodo variable '%s'", name)
-	existingVar, found, err := s.komodoClient.GetVariable(name)
+	_, found, err := s.komodoClient.GetVariable(name)
 
 	if err != nil {
 		return fmt.Errorf("failed during existence check for variable '%s': %w", name, err)
