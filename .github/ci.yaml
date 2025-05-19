@@ -1,0 +1,176 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+    - main
+    - develop
+    - 'feature/**'
+    - 'renovate/**'
+    tags:
+    - 'v*'
+  pull_request:
+    branches:
+    - main
+
+jobs:
+  build:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: '1.24'
+        cache: true
+        cache-dependency-path: "**/go.sum"
+
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+
+    - name: Build
+      run: go build -v ./...
+      env:
+        DATA_DIR: ./data
+
+    - name: Run tests
+      run: go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+      env:
+        DATA_DIR: ./data
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v5
+      with:
+        files: ./coverage.txt
+        fail_ci_if_error: false
+
+  prepare-docker:
+    name: Prepare Docker Build
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tags: ${{ steps.meta.outputs.tags }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set version
+      id: version
+      run: |
+        if [[ $GITHUB_REF == refs/tags/v* ]]; then
+          # For tags, use the tag name without the 'v' prefix
+          VERSION=${GITHUB_REF#refs/tags/v}
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version from tag: $VERSION"
+        else
+          # For non-tag pushes, use a development version with commit SHA
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          VERSION="dev-$SHORT_SHA"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using development version: $VERSION"
+        fi
+
+    - name: Extract metadata for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ghcr.io/${{ github.repository }}
+        tags: |
+          type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+          type=semver,pattern={{version}},value=${{ env.VERSION }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          type=semver,pattern={{major}}.{{minor}},value=${{ env.VERSION }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          type=semver,pattern={{major}},value=${{ env.VERSION }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+          type=raw,value=${{ env.VERSION }}
+          type=sha,format=short
+
+  docker-build:
+    name: Build Docker Image
+    runs-on: ubuntu-latest
+    needs: prepare-docker
+    strategy:
+      matrix:
+        platform: [ linux/amd64, linux/arm64 ]
+      fail-fast: false
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up QEMU
+      uses: docker/setup-qemu-action@v3
+      with:
+        platforms: ${{ matrix.platform }}
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        buildkitd-flags: --debug
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Extract platform info
+      id: platform
+      run: |
+        # Extract OS and architecture from platform
+        OS=$(echo ${{ matrix.platform }} | cut -d/ -f1)
+        ARCH=$(echo ${{ matrix.platform }} | cut -d/ -f2)
+        echo "os=$OS" >> $GITHUB_OUTPUT
+        echo "arch=$ARCH" >> $GITHUB_OUTPUT
+        echo "Building for $OS/$ARCH"
+
+    - name: Build and push by digest
+      id: build
+      uses: docker/build-push-action@v6
+      with:
+        context: .
+        platforms: ${{ matrix.platform }}
+        push: true
+        build-args: |
+          APP_VERSION=${{ needs.prepare-docker.outputs.version }}
+        outputs: type=image,name=ghcr.io/${{ github.repository }},push-by-digest=true,name-canonical=true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        labels: |
+          org.opencontainers.image.title=komodo-op
+          org.opencontainers.image.description=Komodo 1Password Sync
+          org.opencontainers.image.url=https://github.com/${{ github.repository }}
+          org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          org.opencontainers.image.version=${{ needs.prepare-docker.outputs.version }}
+          org.opencontainers.image.created=${{ github.event.repository.updated_at }}
+          org.opencontainers.image.revision=${{ github.sha }}
+          org.opencontainers.image.licenses=MIT
+
+    - name: Export digest
+      run: |
+        mkdir -p /tmp/digests
+        digest="${{ steps.build.outputs.digest }}"
+        touch "/tmp/digests/${digest#sha256:}"
+        echo "Digest: $digest"
+
+    - name: Upload digest
+      uses: actions/upload-artifact@v4
+      with:
+        name: digests-${{ steps.platform.outputs.os }}-${{ steps.platform.outputs.arch }}
+        path: /tmp/digests/*
+        if-no-files-found: error
+        retention-days: 1
